@@ -1,0 +1,5 @@
+user = room4349
+password = 4349
+host = localhost
+port = 5432
+db = FTFM_DB
