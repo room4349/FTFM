@@ -93,17 +93,17 @@ class TeamList(Base):
         try:
             params = {'limit': 5000}
 
-            response = requests.get(URL,API_KEY,params=params)
+            response = requests.get(URL,API_KEY,params)
 
             if response.status_code == 200:
                 data = response.json()
                 return (ResponseStatusCode.SUCCESS,
-                        list(map(lambda x: {"team_id": x["id"],
-                                            "team_name": x["schoolGubun"],
-                                            "short_name": x["adres"],
-                                            "tla": x["link"],
-                                            "crest": x["estType"],
-                                            "address": x["totalCount"],
+                        list(map(lambda x: {"team_id": x["team_id"],
+                                            "team_name": x["team_name"],
+                                            "short_name": x["short_name"],
+                                            "tla": x["tla"],
+                                            "crest": x["crest"],
+                                            "address": x["address"],
                                             "website": x["website"],
                                             "founded": x["founded"],
                                             "club_colors": x["club_colors"],

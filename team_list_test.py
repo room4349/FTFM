@@ -53,10 +53,10 @@ class TeamList(Base):
                 api_data = response.json()
                 print("API에서 팀 데이터를 성공적으로 가져왔습니다.")  # 성공 메시지 출력
 
-                # API에서 가져온 데이터 출력
-                print("API에서 가져온 팀 데이터:")
-                for team in api_data['teams']:
-                    print(team)
+                # # API에서 가져온 데이터 출력
+                # print("API에서 가져온 팀 데이터:")
+                # for team in api_data['teams']:
+                #     print(team)
 
                 # JSON 파일로 저장
                 with open(output_file, 'w', encoding='utf-8') as f:
@@ -103,9 +103,8 @@ class TeamList(Base):
                     clubColors=team_json.get('clubColors', ''),
                     venue=team_json.get('venue', '')
                 )
-                dbo.session.add(team_data)  # 이미 존재하는 경우 업데이트, 없는 경우 삽입합니다.
+                dbo.session.merge(team_data)  # 이미 존재하는 경우 업데이트, 없는 경우 삽입합니다.
             dbo.session.commit()
-            print("데이터를 데이터베이스에 성공적으로 삽입했습니다.")
             return True  # 성공 시 True를 반환합니다.
         except Exception as e:
             dbo.session.rollback()
