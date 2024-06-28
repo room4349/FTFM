@@ -79,7 +79,7 @@ class TeamList(Base):
         # API 설정
         uri = 'http://api.football-data.org/v4/teams/'
         headers = {'X-Auth-Token': 'fc80ad2a4cab4d959d168d5c67e7cb3b'}
-        params = {'limit': 5000}
+        params = {'limit': 1500}
 
         # API에서 데이터 가져오기
         api_data = cls.get_api_data(uri, headers, params)

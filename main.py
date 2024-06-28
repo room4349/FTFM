@@ -37,6 +37,7 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 app.include_router(routers.TeamList_router)
+app.include_router(routers.account_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,7 +61,7 @@ async def validation_exception_handler(request, exc):
 if __name__ == "__main__":
     status_code, data =  TeamList._check_data_exist(DBObject.instance)
     if status_code != ResponseStatusCode.CONFLICT:
-        status_code, result = TeamList._init_univ(DBObject.instance, CARRERNET_URL, API_KEY)
+        status_code, result = TeamList._init_team_list(DBObject.instance, CARRERNET_URL, API_KEY)
         if status_code != ResponseStatusCode.SUCCESS:
             print(result.text)
             exit(0)

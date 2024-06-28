@@ -1,34 +1,20 @@
 from models.response import ResponseStatusCode, Detail
 from typing import Dict, Any, List, TypeVar, Tuple
-# from utility.checker import is_valid_uuid_format
-from sqlalchemy import Column, String, Integer, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, Integer
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.engine.row import Row
 from database.conn import DBObject
 from models.base import Base
-from pathlib import Path
-from PIL import Image
 import requests
 import json
 import traceback
-import requests
 import logging
-import rembg
-import uuid
-import os
 
-TeamList = TypeVar("TeamList", bound="TeamList")
-
+TeamListType = TypeVar("TeamListType", bound="TeamList")
 
 class TeamList(Base):
-    """
-    팀 목록을 저장하는 데이터베이스 테이블을 나타내는 클래스입니다.
-    """
-   
     __tablename__ = "TeamList"
 
-    team_id = Column(String, primary_key=True)
+    team_id = Column(Integer, primary_key=True)
     team_name = Column(String(100), nullable=False)
     short_name = Column(String(50))
     tla = Column(String(10))
@@ -39,151 +25,139 @@ class TeamList(Base):
     club_colors = Column(String(100))
     venue = Column(String(200))
 
-
-
     def __init__(
         self,
         team_id,
         team_name,
+        short_name=None,
         tla=None,
         crest=None,
         address=None,
         website=None,
+        founded=None,
         club_colors=None,
         venue=None
     ):
         self.team_id = team_id
         self.team_name = team_name
+        self.short_name = short_name
         self.tla = tla
         self.crest = crest
         self.address = address
         self.website = website
+        self.founded = founded
         self.club_colors = club_colors
-        self.venue=venue
+        self.venue = venue
 
     @property
     def info(self):
         return {
             "team_id": self.team_id,
             "team_name": self.team_name,
-            "tla":self.tla,
-            "crest":  self.crest,
+            "short_name": self.short_name,
+            "tla": self.tla,
+            "crest": self.crest,
             "address": self.address,
-            "website":  self.website,
-            "club_colors":  self.club_colors,
+            "website": self.website,
+            "founded": self.founded,
+            "club_colors": self.club_colors,
             "venue": self.venue
         }
 
+    @staticmethod
+    def _check_data_exist(dbo: DBObject) -> Tuple[ResponseStatusCode, None | str]:
+        try:
+            if not dbo.session.query(TeamList).all():
+                return ResponseStatusCode.SUCCESS, None
+            else:
+                return ResponseStatusCode.CONFLICT, Detail("Data already exists in TeamList.")
+        except Exception as e:
+            logging.error(f"Error checking data existence: {e}")
+            return ResponseStatusCode.INTERNAL_SERVER_ERROR, str(e)
 
     @staticmethod
-    def _check_data_exist(
-        dbo: DBObject
-    ) -> Tuple[ResponseStatusCode, None | str]:
-        return {
-            True: (ResponseStatusCode.SUCCESS, None),
-            False: (ResponseStatusCode.CONFLICT,
-                    Detail("Data Conflicted in University._check_data_exist"))
-        }[dbo.session.query(TeamList).all() == []]
-
-    @staticmethod
-    def _crawl_univ_info(
-        URL: str,
-        API_KEY: str
-    ) -> Tuple[ResponseStatusCode, List[Dict[str, Any]] | str]:
+    def _crawl_team_info(URL: str, API_KEY: str) -> Tuple[ResponseStatusCode, List[Dict[str, Any]] | str]:
         try:
             params = {'limit': 5000}
+            headers = {'Authorization': f'Bearer {API_KEY}'}
 
-            response = requests.get(URL,API_KEY,params)
+            response = requests.get(URL, headers=headers, params=params)
 
             if response.status_code == 200:
                 data = response.json()
-                return (ResponseStatusCode.SUCCESS,
-                        list(map(lambda x: {"team_id": x["team_id"],
-                                            "team_name": x["team_name"],
-                                            "short_name": x["short_name"],
-                                            "tla": x["tla"],
-                                            "crest": x["crest"],
-                                            "address": x["address"],
-                                            "website": x["website"],
-                                            "founded": x["founded"],
-                                            "club_colors": x["club_colors"],
-                                            "venue": x["venue"]
-                                            },
-                                data["dataSearch"]["content"])))
-
+                teams = [
+                    {
+                        "team_id": x["team_id"],
+                        "team_name": x["team_name"],
+                        "short_name": x["short_name"],
+                        "tla": x["tla"],
+                        "crest": x["crest"],
+                        "address": x["address"],
+                        "website": x["website"],
+                        "founded": x["founded"],
+                        "club_colors": x["club_colors"],
+                        "venue": x["venue"]
+                    }
+                    for x in data["dataSearch"]["content"]
+                ]
+                return ResponseStatusCode.SUCCESS, teams
             else:
-                return (ResponseStatusCode.FAIL,
-                        Detail("""URL Not Responded in \
-                            University._crawl_univ_info"""))
+                return ResponseStatusCode.FAIL, Detail("URL not responded in TeamList._crawl_team_info")
 
         except requests.exceptions.ConnectionError:
-            return (ResponseStatusCode.NOT_FOUND,
-                    Detail("URL Not Found in University._crawl_univ_info"))
+            return ResponseStatusCode.NOT_FOUND, Detail("URL not found in TeamList._crawl_team_info")
 
         except Exception as e:
-            logging.error(f"""{e}: {''.join(traceback.format_exception(None,
-                        e, e.__traceback__))}""")
-            return (ResponseStatusCode.INTERNAL_SERVER_ERROR, str(e))
+            logging.error(f"Error crawling team info: {e}")
+            return ResponseStatusCode.INTERNAL_SERVER_ERROR, str(e)
 
     @staticmethod
-    def _insert_univ_info(
-        dbo: DBObject,
-        univ_info: List[Dict[str, Any]]
-    ) -> Tuple[ResponseStatusCode, str | None]:
+    def _insert_team_info(dbo: DBObject, team_info: List[Dict[str, Any]]) -> Tuple[ResponseStatusCode, str | None]:
         try:
-            for u in univ_info:
-                univ = TeamList(
-                    univ_name=u["univ_name"],
-                    est_type=u["est_type"],
-                    link=u["link"],
-                    address=u["address"],
-                    univ_gubun=u["univ_gubun"]
+            for t in team_info:
+                team = TeamList(
+                    team_id=t["team_id"],
+                    team_name=t["team_name"],
+                    short_name=t["short_name"],
+                    tla=t["tla"],
+                    crest=t["crest"],
+                    address=t["address"],
+                    website=t["website"],
+                    founded=t["founded"],
+                    club_colors=t["club_colors"],
+                    venue=t["venue"]
                 )
-                dbo.session.add(univ)
+                dbo.session.add(team)
 
-            return (ResponseStatusCode.SUCCESS, None)
+            dbo.session.commit()
+            return ResponseStatusCode.SUCCESS, None
 
         except IntegrityError:
-            return (ResponseStatusCode.CONFLICT,
-                    Detail("""Data Already Exist in
-                        University._insert_univ_info"""))
+            dbo.session.rollback()
+            return ResponseStatusCode.CONFLICT, Detail("Data already exists in TeamList._insert_team_info")
 
         except Exception as e:
-            logging.error(f"""{e}: {''.join(traceback.format_exception(None,
-                        e, e.__traceback__))}""")
-            return (ResponseStatusCode.INTERNAL_SERVER_ERROR, Detail(str(e)))
-
-        finally:
-            dbo.session.commit()
+            logging.error(f"Error inserting team info: {e}")
+            dbo.session.rollback()
+            return ResponseStatusCode.INTERNAL_SERVER_ERROR, Detail(str(e))
 
     @staticmethod
-    def _init_univ(
-        dbo: DBObject,
-        URL: str,
-        API_KEY: str
-    ) -> Tuple[ResponseStatusCode, str | None]:
+    def _init_team_list(dbo: DBObject, URL: str, API_KEY: str) -> Tuple[ResponseStatusCode, str | None]:
         try:
             result, data = TeamList._check_data_exist(dbo)
             if result != ResponseStatusCode.SUCCESS:
-                return (result, data)
+                return result, data
 
-            result, data = TeamList._crawl_univ_info(URL, API_KEY)
+            result, data = TeamList._crawl_team_info(URL, API_KEY)
             if result != ResponseStatusCode.SUCCESS:
-                return (result, data)
+                return result, data
 
-            if int(data[0]["total"]) != len(data):
-                return (ResponseStatusCode.DATA_REQUIRED,
-                        Detail("""Total University Count Not Equals in
-                            University._init_univ"""))
+            result, detail = TeamList._insert_team_info(dbo, data)
+            if isinstance(detail, Detail):
+                raise Exception(detail.message)
 
-            else:
-                result, detail = TeamList._insert_univ_info(dbo, data)
-                if isinstance(detail, Detail):
-                    raise Exception(detail.message)
-
-                return (ResponseStatusCode.SUCCESS, None)
+            return ResponseStatusCode.SUCCESS, None
 
         except Exception as e:
-            logging.error(f"""{e}: {''.join(traceback.format_exception(None,
-                        e, e.__traceback__))}""")
-            return (ResponseStatusCode.INTERNAL_SERVER_ERROR, Detail(str(e)))
+            logging.error(f"Error initializing team list: {e}")
+            return ResponseStatusCode.INTERNAL_SERVER_ERROR, Detail(str(e))
